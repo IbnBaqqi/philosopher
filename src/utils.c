@@ -6,63 +6,104 @@
 /*   By: sabdulba <sabdulba@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/03/05 22:05:02 by sabdulba          #+#    #+#             */
-/*   Updated: 2025/03/05 22:05:40 by sabdulba         ###   ########.fr       */
+/*   Updated: 2025/04/04 08:09:15 by sabdulba         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../inc/philo.h"
 
-int	is_digit(char *str)
+long long	ph_get_time(t_time_type type)
 {
-	char	tmp;
+	struct timeval	start;
+	long long		timer;
 
-	while (*str)
-	{
-		tmp = *str++;
-		if (tmp < 48 || tmp > 57)
-			return (2);
-	}
-	return (0);
+	gettimeofday(&start, NULL);
+	if (TIME_USEC == type)
+		timer = start.tv_sec * 1000000 + start.tv_usec;
+	else if (TIME_MSEC == type)
+		timer = start.tv_sec * 1000 + start.tv_usec / 1000;
+	else
+		timer = start.tv_sec + start.tv_usec / 1000000;
+	return (timer);
 }
 
-int	ft_strcmp(char *s1, char *s2)
+void	ph_usleep(long long from_usec, long long usec, t_philo *philo)
 {
-	while (*s1 != '\0' && (*s1 == *s2))
+	long long	remainder;
+	long long	elapsed;
+
+	elapsed = ph_get_time(TIME_USEC) - from_usec;
+	remainder = usec - elapsed;
+	while (elapsed <= usec)
 	{
-		s1++;
-		s2++;
+		if (remainder > 1000)
+			usleep(remainder / 2);
+		else if (remainder > 100)
+			usleep(100);
+		else
+			usleep(50);
+		if (ph_get_time(TIME_MSEC) - philo->last_meal_ms >= philo->info->die_ms)
+			break ;
+		elapsed = ph_get_time(TIME_USEC) - from_usec;
+		remainder = usec - elapsed;
 	}
-	return (*(char *)s1 - *(char *)s2);
 }
 
-int	ft_atoi(const char *str)
+int	ph_print(t_msg_type type, t_info *info, t_philo *philo)
 {
-	long	i;
-	long	nbr;
-	int		is_neg;
+	long long	elapsed_ms;
 
-	i = 0;
-	nbr = 0;
-	is_neg = 0;
-	while (str[i] == ' ' || (str[i] >= 9 && str[i] <= 13))
-		i++;
-	if (str[i] != '\0' && str[i] == '-')
-		is_neg = 1;
-	if (str[i] == '+' || str[i] == '-')
-		i++;
-	while (str[i] != '\0' && (str[i] >= '0' && str[i] <= '9'))
+	if (ph_is_dead(info, philo))
+		return (EXIT_FAILURE);
+	pthread_mutex_lock(&info->print_lock);
+	elapsed_ms = ph_get_time(TIME_MSEC) - info->start_ms;
+	if (STATUS_EXIT == info->status)
 	{
-		nbr = (nbr * 10) + (str[i] - '0');
-		i++;
+		pthread_mutex_unlock(&info->print_lock);
+		return (EXIT_FAILURE);
 	}
-	if (is_neg == 1)
-		return (-nbr);
-	return (nbr);
+	if (MSG_SLEEP == type)
+		printf("%lld %d is sleeping\n", elapsed_ms, philo->num);
+	else if (MSG_THINK == type)
+		printf("%lld %d is thinking\n", elapsed_ms, philo->num);
+	else if (MSG_EAT == type)
+		printf("%lld %d is eating\n", elapsed_ms, philo->num);
+	else if (MSG_FORK == type)
+	{
+		printf("%lld %d has taken a fork\n", elapsed_ms, philo->num);
+		printf("%lld %d has taken a fork\n", elapsed_ms, philo->num);
+	}
+	pthread_mutex_unlock(&info->print_lock);
+	return (EXIT_SUCCESS);
 }
 
-int	ft_error(char *message)
+bool	ph_is_dead(t_info *info, t_philo *philo)
 {
-	printf("\033[1;31m""Error\n""\033[0m");
-	printf("\033[3m\033[2;37m"" %s\n""\033[0m", message);
-	return (0);
+	long long	elapsed_ms;
+
+	if (ph_get_time(TIME_MSEC) - philo->last_meal_ms >= info->die_ms)
+	{
+		pthread_mutex_lock(&info->print_lock);
+		elapsed_ms = ph_get_time(TIME_MSEC) - info->start_ms;
+		if (STATUS_EXIT != info->status)
+			printf("%lld %d died\n", elapsed_ms, philo->num);
+		info->status = STATUS_EXIT;
+		pthread_mutex_unlock(&info->print_lock);
+		return (true);
+	}
+	return (false);
+}
+
+bool	is_dinner_end(t_info *info)
+{
+	pthread_mutex_lock(&info->print_lock);
+	if (info->forks == info->indx && STATUS_EXIT != info->status)
+	{
+		printf("All have eaten at least %d times.\n", info->meals);
+		info->status = STATUS_EXIT;
+		pthread_mutex_unlock(&info->print_lock);
+		return (true);
+	}
+	pthread_mutex_unlock(&info->print_lock);
+	return (false);
 }

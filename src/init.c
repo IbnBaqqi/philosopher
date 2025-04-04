@@ -6,65 +6,97 @@
 /*   By: sabdulba <sabdulba@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/03/05 22:11:14 by sabdulba          #+#    #+#             */
-/*   Updated: 2025/03/07 09:06:15 by sabdulba         ###   ########.fr       */
+/*   Updated: 2025/04/04 08:13:13 by sabdulba         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../inc/philo.h"
 
-int	init_data(t_data *data, char **av, int ac)
+static void	init_fork_lock(t_info *info);
+static int	min_i(int first, int second);
+static int	max_i(int first, int second);
+
+void	ph_init_mutexes(t_info *info)
 {
-	data->philo_died = 0;
-	data->philo_num = ft_atoi(av[1]);
-	data->time.to_die = (uint64_t)ft_atoi(av[2]);
-	data->time.to_eat = (uint64_t)ft_atoi(av[3]);
-	data->time.to_sleep = (uint64_t)ft_atoi(av[4]);
-	if (ac == 6)
-		data->n_eat = ft_atoi(av[5]);
-	else
-		data->n_eat = -1;
-	if (!data->philo_num || !data->time.to_die || !data->time.to_eat
-		|| !data->time.to_sleep || (ac == 6 && !data->n_eat))
-		return (ft_error("Some arguments are zero or out bound"), 0);
-	return (1);
-}
-
-int	mutex_init(t_data *data)
-{
-	int	i;
-
-	i = 0;
-	data->mymutex = malloc(sizeof(t_mutex) * data->philo_num);
-	if (!data->mymutex)
-		return (ft_error("My mutex memory allocation failed"), 0);
-	while (i < data->philo_num)
-		if (pthread_mutex_init(data->mymutex + i++, NULL))
-			return (ft_error("Failed to initialise mutex"), 0);
-	if (pthread_mutex_init(&data->print, NULL))
-		return (ft_error("Failed to initialise mutex"), 0);
-	if (pthread_mutex_init(&data->shared, NULL))
-		return (ft_error("Failed to initialise mutex"), 0);
-	if (pthread_mutex_init(&data->tm, NULL))
-		return (ft_error("Failed to initialise mutex"), 0);
-	return (1);
-}
-
-void	init_philo(t_philo *phi, t_data *data)
-{
-	int	i;
-
-	i = 0;
-	while (i < data->philo_num)
+	init_fork_lock(info);
+	if (0 != pthread_mutex_init(&info->print_lock, NULL))
 	{
-		phi[i].phi_id = i;
-		phi[i].n_eaten = 0;
-		phi[i].t_die = 0;
-		phi[i].hand.left = i;
-		phi[i].hand.right = (i + 1) % data->philo_num;
-		phi[i].data = data;
+		ph_mutexes_destroy(info->fork_lock, info->forks);
+		free(info->fork_lock);
+		ph_exit(ERROR_MUTEX_INIT);
+	}
+	if (0 != pthread_mutex_init(&info->time_lock, NULL))
+	{
+		ph_mutexes_destroy(info->fork_lock, info->forks);
+		ph_mutexes_destroy(&info->print_lock, 1);
+		free(info->fork_lock);
+		ph_exit(ERROR_MUTEX_INIT);
+	}
+}
+
+static void	init_fork_lock(t_info *info)
+{
+	int	i;
+
+	info->fork_lock = malloc(info->forks * sizeof(pthread_mutex_t));
+	if (!info->fork_lock)
+		ph_exit(ERROR_MALLOC);
+	info->fork_bool = malloc(info->forks * sizeof(bool));
+	if (!info->fork_bool)
+	{
+		free(info->fork_lock);
+		ph_exit(ERROR_MALLOC);
+	}
+	i = 0;
+	while (i < info->forks)
+	{
+		info->fork_bool[i] = false;
+		if (0 != pthread_mutex_init(&info->fork_lock[i], NULL))
+		{
+			ph_mutexes_destroy(info->fork_lock, i);
+			free(info->fork_lock);
+			free(info->fork_bool);
+			ph_exit(ERROR_MUTEX_INIT);
+		}
 		i++;
 	}
-	phi[i].t_die = 0;
-	phi[i].n_eaten = 0;
-	phi[i].data = data;
+}
+
+void	ph_init_philosophers(t_info *info, t_philo **philo)
+{
+	t_philo	*ph;
+	int		i;
+
+	ph = malloc(info->forks * sizeof(t_philo));
+	if (!ph)
+		ph_destroy_and_exit(ERROR_MALLOC, info, ph);
+	i = 0;
+	while (i < info->forks)
+	{
+		ph[i].info = info;
+		ph[i].num = i + 1;
+		ph[i].first_lock = &info->fork_lock[min_i(i, (i + 1) % info->forks)];
+		ph[i].second_lock = &info->fork_lock[max_i(i, (i + 1) % info->forks)];
+		ph[i].first_bool = &info->fork_bool[min_i(i, (i + 1) % info->forks)];
+		ph[i].second_bool = &info->fork_bool[max_i(i, (i + 1) % info->forks)];
+		ph[i].last_meal_ms = 0;
+		ph[i].meals_done = 0;
+		ph[i].delay_first_meal = (0 != ph[i].num % 2);
+		i++;
+	}
+	*philo = ph;
+}
+
+static int	min_i(int first, int second)
+{
+	if (first < second)
+		return (first);
+	return (second);
+}
+
+static int	max_i(int first, int second)
+{
+	if (first > second)
+		return (first);
+	return (second);
 }

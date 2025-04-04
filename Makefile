@@ -6,7 +6,7 @@
 #    By: sabdulba <sabdulba@student.hive.fi>        +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/01/14 10:29:28 by sabdulba          #+#    #+#              #
-#    Updated: 2025/03/05 22:06:45 by sabdulba         ###   ########.fr        #
+#    Updated: 2025/03/07 12:29:33 by sabdulba         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -24,7 +24,7 @@ INC_DIR = inc
 
 OBJS = $(SRC:%.c=$(OBJ_DIR)/%.o)
 
-CC = gcc -g -pthread -fsanitize=address 
+CC = gcc -g -pthread #-fsanitize=address 
 
 NONE='\033[0m'
 GREEN='\033[32m'

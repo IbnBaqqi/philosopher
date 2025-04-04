@@ -6,42 +6,23 @@
 /*   By: sabdulba <sabdulba@student.hive.fi>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/01/14 10:29:14 by sabdulba          #+#    #+#             */
-/*   Updated: 2025/03/07 09:12:39 by sabdulba         ###   ########.fr       */
+/*   Updated: 2025/04/04 08:08:46 by sabdulba         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../inc/philo.h"
 
-int	single_philo(t_data *data, t_philo *phi)
+int	main(int argc, char **argv)
 {
-	data->timer = get_time();
-	print_state(phi, 1, NONE, L_FORK);
-	time_sim(data->time.to_die);
-	print_state(phi, 1, RED, DIED);
-	free_all(data, phi);
-	return (0);
-}
-
-int main(int ac, char **av)
-{
-	t_data	*data;
+	t_info	info;
 	t_philo	*philo;
 
-	if (validator(ac, av))
-		return (1);
-	data = malloc(sizeof(t_data));
-	if (!data)
-		return (ft_error("Memory allocation failed"), 2);
-	if (!init_data(data, av, ac))
-		return (2);
-	if (!mutex_init(data))
-		return (3);
-	philo = malloc(sizeof(t_philo) * (data->philo_num + 1));
-	if (!philo)
-		return (ft_error("Memory allocation failed"), 4);
-	init_philo(philo, data);
-	if (data->philo_num == 1)
-		return (single_philo(data, philo));
-	if (!handle_thread(philo)) // Todo
-		return (free_all(data, philo), 6); //Todo
+	philo = NULL;
+	memset(&info, 0, sizeof(t_info));
+	ph_parse_argv(argc, argv, &info);
+	ph_init_mutexes(&info);
+	ph_init_philosophers(&info, &philo);
+	ph_create_threads(&info, philo);
+	ph_pthread_join(&info, philo);
+	ph_destroy_and_exit(EXIT_SUCCESS, &info, philo);
 }
